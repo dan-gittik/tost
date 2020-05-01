@@ -9,6 +9,18 @@
     {% block head %}{% endblock %}
   </head>
   <body>
+    {% if user.is_superuser %}
+    {% else %}
+    <nav class="menu">
+      <a href="{% url 'exercises' %}">Exercises</a>
+      {% if user.is_authenticated %}
+        <a href="{% url 'account' %}">Account</a>
+        <a href="{% url 'logout' %}">Log out</a>
+      {% else %}
+        <a href="{% url 'login' %}">Log in</a>
+      {% endif %}
+    </nav>
+    {% endif %}
     {% block body %}{% endblock %}
     <script src="https://code.jquery.com/jquery-3.5.0.min.js"></script>
     <script src="{% static 'scripts.js' %}"></script>

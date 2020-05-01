@@ -124,6 +124,11 @@ def change_password(request):
     })
 
 
+@login_required
+def exercises(request):
+    return render(request, 'exercises.html')
+
+
 # HELPERS
 
 
