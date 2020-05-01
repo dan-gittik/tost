@@ -13,3 +13,7 @@ if not User.objects.filter(username='admin').exists():
     user.is_staff=True
     user.save()
 EOF
+.env/bin/python manage.py shell <<EOF
+from website.models import Settings
+Settings.objects.get_or_create()
+EOF

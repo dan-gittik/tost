@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="form">
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    {% if token %}
+    <input type="text" name="token" value="{{ values.token }}" placeholder="Token" />
+    {% endif %}
+    <input type="text" name="student_id" value="{{ values.student_id }}" placeholder="Student ID" />
+    <input type="text" name="name" value="{{ values.name }}" placeholder="Name" />
+    <input type="text" name="email" value="{{ values.email }}" placeholder="Email" />
+    <input type="password" name="password" value="{{ values.password }}" placeholder="Password" />
+    <button type="submit">Register</button>
+  </form>
+</div>
+{% endblock %}

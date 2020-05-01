@@ -151,3 +151,16 @@ class Comment(models.Model):
     
     def __str__(self):
         return f'{self.author} comment on {self.post}'
+
+
+class Settings(models.Model):
+    
+    token = models.CharField(max_length=256, null=True)
+    whitelist = models.TextField(null=True)
+
+    def __str__(self):
+        return 'configuration'
+
+    @classmethod
+    def get(cls):
+        return cls.objects.first()
