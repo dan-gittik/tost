@@ -1,7 +1,14 @@
+import contextlib
+
+from django.contrib.auth import login as do_login, logout as do_logout
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 
 from . import models
+
+
+# VIEWS
 
 
 def index(request):
@@ -25,19 +32,53 @@ def register(request):
     })
 
 
+def login(request):
+    if request.method == 'POST':
+        try:
+            login_user(request)
+            return redirect(request.GET.get('next', 'account'))
+        except ValueError as error:
+            return render(request, 'login.html', {
+                'error': error,
+                'values': request.POST,
+            })
+    return render(request, 'login.html')
+
+
+def reset_password(request):
+    if request.method == 'POST':
+        pass
+    return render(request, 'reset_password.html')
+
+
+@login_required
+def account(request):
+    if request.method == 'POST':
+        pass
+    return render(request, 'account.html')
+
+
+def logout(request):
+    do_logout(request)
+    return redirect('index')
+
+
+# HELPERS
+
+
 def register_user(request, settings):
     if settings.token:
         token = request.POST.get('token')
         if token != settings.token:
             raise ValueError('Invalid token.')
     student_id = request.POST.get('student_id')
-    if not student_id or not student_id.isnumeric():
+    if not is_valid_student_id(student_id):
         raise ValueError('Invalid student ID.')
     name = request.POST.get('name')
     if not name:
         raise ValueError('Invalid name.')
     email = request.POST.get('email')
-    if not email or '@' not in email:
+    if not is_valid_email(email):
         raise ValueError('Invalid email address.')
     password = request.POST.get('password')
     if not password:
@@ -56,3 +97,26 @@ def register_user(request, settings):
     )
     # Send validation email.
     return user
+
+
+def login_user(request):
+    email = request.POST.get('email')
+    if not is_valid_email(email):
+        raise ValueError('Invalid email.')
+    password = request.POST.get('password')
+    if not password:
+        raise ValueError('Invalid password.')
+    with contextlib.suppress(User.DoesNotExist):
+        user = User.objects.get(email=email)
+        if user.check_password(password):
+            do_login(request, user)
+            return user
+    raise ValueError('Invalid credentials.')
+
+
+def is_valid_student_id(student_id):
+    return student_id and student_id.isnumeric()
+
+
+def is_valid_email(email):
+    return email and '@' in email

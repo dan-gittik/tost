@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="form">
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="text" name="email" value="{{ values.email }}" placeholder="Email" />
+    <input type="password" name="password" value="{{ values.password }}" placeholder="Password" />
+    <button type="submit">Log in</button>
+    <a href="{% url 'reset-password' %}">Forgot password?</a>
+    <a href="{% url 'register' %}">Register</a>
+  </form>
+</div>
+{% endblock %}
