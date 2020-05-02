@@ -297,7 +297,11 @@ def extension(request):
 @csrf_exempt
 def webhook(request):
     data = json.load(request)
-    _clone_repo(data['repository']['ssh_url'])
+    try:
+        repo_path = _clone_repo(data['repository']['ssh_url'])
+        _test_submission(data['sender']['login'], repo_path)
+    except Exception as error:
+        return HttpResponse(str(error), status_code=400)
     return HttpResponse('')
 
 
@@ -315,8 +319,8 @@ def _register_user(request, settings):
     name = request.POST.get('name')
     if not name:
         raise ValueError('Invalid name.')
-    github = request.POST.get('github')
-    if not github:
+    github_username = request.POST.get('github_username')
+    if not github_username:
         raise ValueError('Invalid GitHub username.')
     email = request.POST.get('email')
     if not _is_valid_email(email):
@@ -330,7 +334,7 @@ def _register_user(request, settings):
         raise ValueError('A student with this email already exists')
     token = secrets.token_urlsafe(64)
     print(token) # TODO send email.
-    user = models.User.create(student_id, name, github, email, password, token=token)
+    user = models.User.create(student_id, name, github_username, email, password, token=token)
     return user
 
 
@@ -458,17 +462,29 @@ def _edit_comment(request, comment):
     comment.save()
 
 
-def _clone_repo(url):
-    name = _name_pattern.search(url).group(1)
-    path = pathlib.Path(settings.REPOS_ROOT) / name
-    if path.exists():
-        os.chdir(path)
+def _clone_repo(repo_url):
+    repo_name = _name_pattern.search(url).group(1)
+    repo_path = pathlib.Path(settings.REPOS_ROOT) / repo_name
+    if repo_path.exists():
+        os.chdir(repo_path)
         subprocess.run(['git', 'pull', 'origin', 'master'])
     else:
         os.makedirs(settings.REPOS_ROOT, exist_ok=True)
         os.chdir(settings.REPOS_ROOT)
-        print(['git', 'clone', url])
-        subprocess.run(['git', 'clone', url])
+        subprocess.run(['git', 'clone', repo_url])
+    return repo_path
+
+
+def _test_submission(github_username, repo_path):
+    user = models.User.objects.filter(github_username=github_username).first()
+    if not user:
+        raise ValueError('Invalid GitHub username.')
+    submissions = models.Exercise.get_submissions(user, repo_path)
+    for submission in submissions:
+        submission.test_output = 'passed'
+        submission.test_grade = 100
+        submission.updated = timezone.now()
+        submission.save()
 
 
 def _is_valid_student_id(student_id):

@@ -31,7 +31,7 @@ def main():
                 name = f'user {i}',
                 email = email,
                 student_id = student_id,
-                github = f'user{i}',
+                github_username = f'user{i}',
                 is_valid = True,
             )
     today = dt.date.today()
@@ -42,6 +42,7 @@ def main():
             exercise = Exercise.objects.create(
                 title = title,
                 number = i,
+                directory = f'exercise{i}',
                 repo_url = f'https://github.com/{i}',
                 instructions_url = f'https://docs.google.com/{i}',
                 publish_date = today + dt.timedelta(days=offset),

@@ -11,7 +11,7 @@ class User(models.Model):
     email = models.CharField(max_length=256)
     name = models.CharField(max_length=256)
     student_id = models.CharField(max_length=256)
-    github = models.CharField(max_length=256)
+    github_username = models.CharField(max_length=256)
     token = models.CharField(max_length=64, null=True)
     is_valid = models.BooleanField(default=False)
 
@@ -19,7 +19,7 @@ class User(models.Model):
         return f'{self.name} ({self.student_id}, {self.email_address}'
 
     @classmethod
-    def create(cls, student_id, name, github, email, password, token=None):
+    def create(cls, student_id, name, github_username, email, password, token=None):
         auth = AuthUser.objects.create_user(
             username = email,
             password = password,
@@ -28,7 +28,7 @@ class User(models.Model):
             auth = auth,
             student_id = student_id,
             name = name,
-            github = github,
+            github_username = github_username,
             email = email,
             token = token,
         )
@@ -57,12 +57,34 @@ class Exercise(models.Model):
     number = models.IntegerField(unique=True)
     title = models.CharField(max_length=256)
     repo_url = models.CharField(max_length=4096)
+    directory = models.CharField(max_length=256)
     instructions_url = models.CharField(max_length=4096)
     publish_date = models.DateField()
     deadline = models.DateField()
 
     def __str__(self):
         return f'Exercise {self.number}: {self.title}'
+
+    @classmethod
+    def get_submissions(cls, user, repo_path):
+        exercises = {exercise.directory: exercise for exercise in Exercise.objects.all()}
+        submissions = []
+        today = timezone.now().date()
+        for name in repo_path.iterdir():
+            if not name.is_dir() or name not in exercises:
+                continue
+            exercise = exercises[name]
+            submission = Submission.objects.filter(user=user, exercise=exercise).first()
+            if not submission:
+                submission = Submission.objects.create(
+                    user = user,
+                    exercise = exercise,
+                    repo_path = str(repo_path),
+                )
+            if submission.effective_deadline < today:
+                continue
+            submissions.append(submission)
+        return submissions
 
 
 class UserExercise:
@@ -102,7 +124,9 @@ class Submission(models.Model):
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submissions')
     exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name='submissions')
-    date = models.DateTimeField()
+    repo_path = models.CharField(max_length=4096)
+    created = models.DateTimeField(auto_now=True)
+    updated = models.DateTimeField(auto_now_add=True)
     test_output = models.TextField(null=True)
     test_grade = models.FloatField(null=True)
 
