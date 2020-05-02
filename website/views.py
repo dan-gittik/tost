@@ -7,7 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import Count
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import render, redirect
+from django.utils import timezone
+from django.shortcuts import get_object_or_404, render, redirect
 
 from . import models
 
@@ -129,10 +130,11 @@ def change_password(request):
 
 @login_required
 def exercises(request):
-    today = dt.date.today()
+    today = timezone().now().date()
+    exercises = models.UserExercise.all(request.user, today)
     return render(request, 'exercises.html', {
         'today': today,
-        'exercises': models.UserExercise.all(request.user, today),
+        'exercises': exercises,
         'Extension': models.Extension,
     })
 
@@ -148,8 +150,118 @@ def exercise_cr_files(request, exercise, path):
 
 
 @login_required
-def exercise_forum(request, exercise):
-    pass
+def forum(request, exercise):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    return render(request, 'forum.html', {
+        'exercise': exercise,
+    })
+
+
+@login_required
+def add_post(request, exercise):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    if request.method == 'POST':
+        try:
+            post = _add_post(request, exercise)
+            return redirect('post', exercise.order, post.pk)
+        except ValueError as error:
+            return render(request, 'edit_post.html', {
+                'error': error,
+                'exercise': exercise,
+                'post': request.POST,
+            })
+    return render(request, 'edit_post.html', {
+        'exercise': exercise,
+    })
+
+
+@login_required
+def post(request, exercise, post):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    return render(request, 'post.html', {
+        'exercise': exercise,
+        'post': post,
+    })
+
+
+@login_required
+def edit_post(request, exercise, post):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    if request.method == 'POST':
+        try:
+            _edit_post(request, post)
+            return redirect('post', exercise.order, post.pk)
+        except ValueError as error:
+            return render(request, 'edit_post.html', {
+                'error': error,
+                'exercise': exercise,
+                'post': post,
+                'values': request.POST,
+            })
+    return render(request, 'edit_post.html', {
+        'exercise': exercise,
+        'post': post,
+    })
+
+
+@login_required
+def delete_post(request, exercise, post):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    post.delete()
+    return redirect('forum', exercise.pk)
+
+
+@login_required
+def add_comment(request, exercise, post):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    if request.method == 'POST':
+        try:
+            _add_comment(request, post)
+        except ValueError as error:
+            return render(request, 'post.html', {
+                'error': error,
+                'exercise': exercise,
+                'post': post,
+                'values': request.POST,
+            })
+    return redirect('post', exercise.order, post.pk)
+
+
+@login_required
+def edit_comment(request, exercise, post, comment):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    comment = get_object_or_404(models.Comment, pk=comment)
+    if request.method == 'POST':
+        try:
+            _edit_comment(request, comment)
+            return redirect('post', exercise.order, post.pk)
+        except ValueError as error:
+            return render(request, 'post.html', {
+                'error': error,
+                'exercise': exercise,
+                'post': post,
+                'target': comment,
+                'values': request.POST,
+            })
+    return render(request, 'post.html', {
+        'exercise': exercise,
+        'post': post,
+        'target': comment,
+    })
+
+
+@login_required
+def delete_comment(request, exercise, post, comment):
+    exercise = get_object_or_404(models.Exercise, order=exercise)
+    post = get_object_or_404(models.Post, pk=post)
+    comment = get_object_or_404(models.Comment, pk=comment)
+    comment.delete()
+    return redirect('post', exercise.pk, post.pk)
 
 
 @login_required
@@ -157,7 +269,7 @@ def extension(request):
     if request.method == 'POST':
         _add_extension(request)
         return redirect('exercises')
-    today = dt.date.today()
+    today = timezone.now().date()
     exercises = models.Exercise.objects.annotate(count=Count('extensions')).filter(
         publish_date__lte = today,
         deadline__gt = today,
@@ -284,6 +396,54 @@ def _add_extension(request):
     )
 
 
+def _add_post(request, exercise):
+    title = request.POST.get('title')
+    if not title:
+        raise ValueError('Invalid title.')
+    content = request.POST.get('content')
+    if not content:
+        raise ValueError('Invalid content.')
+    post = models.Post.objects.create(
+        exercise = exercise,
+        title = title,
+        author = request.user,
+        content = content,
+    )
+    return post
+
+
+def _edit_post(request, post):
+    title = request.POST.get('title')
+    if not title:
+        raise ValueError('Invalid title.')
+    content = request.POST.get('content')
+    if not content:
+        raise ValueError('Invalid content.')
+    post.title = title
+    post.content = content
+    post.save()
+
+
+def _add_comment(request, post):
+    content = request.POST.get('content')
+    if not content:
+        raise ValueError('Invalid content.')
+    comment = models.Comment.objects.create(
+        post = post,
+        author = request.user,
+        content = content,
+    )
+    return comment
+
+
+def _edit_comment(request, comment):
+    content = request.POST.get('content')
+    if not content:
+        raise ValueError('Invalid content.')
+    comment.content = content
+    comment.save()
+
+
 def _is_valid_student_id(student_id):
     return student_id and student_id.isnumeric()
 
@@ -299,7 +459,7 @@ def _is_valid_password(password):
 def _is_valid_exercise(exercise):
     if not exercise or not exercise.isnumeric():
         return False
-    today = dt.date.today()
+    today = timezone.now().date()
     exercise = models.Exercise.objects.filter(
         order = int(exercise),
         publish_date__lte = today,

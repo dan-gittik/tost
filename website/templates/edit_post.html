@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="form">
+  <h2>New Post</h2>
+  {% if error %}
+  {{ error }}
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="text" name="title" value="{% if values %}{{ values.title }}{% else %}{{ post.title }}{% endif %}" placeholder="Title" />
+    <textarea name="content" placeholder="Content">{% if values %}{{ values.content }}{% else %}{{ post.content }}{% endif %}</textarea>
+    <button type="submit">Post</button>
+    <a href="{% url 'forum' exercise.pk %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

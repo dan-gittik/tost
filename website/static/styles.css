@@ -10,3 +10,7 @@ html, body {
 .exercise-complete {
   background-color: gray;
 }
+
+.selected-comment {
+  background-color: gray;
+}

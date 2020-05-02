@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="post">
+  <h2>{{ post.title }}</h2>
+  <div class="metadata">
+    posted by {{ post.author.first_name }} on {{ post.datetime }}
+    {% if request.user == post.author %}
+    <a href="{% url 'edit-post' exercise.order post.pk %}">Edit</a>
+    <a href="{% url 'delete-post' exercise.order post.pk %}">Delete</a>
+    {% endif %}
+  </div>
+  <div class="content">{{ post.content }}</div>
+  {% for comment in post.comments.all %}
+  <div class="comment{% if comment == target %} selected-comment{% endif %}">
+    <div class="content">{{ comment.content }}</div>
+    <div class="metadata">
+      posted by {{ comment.author.first_name }} on {{ comment.datetime }}
+      {% if request.user == comment.author %}
+      <a href="{% url 'edit-comment' exercise.order post.pk comment.pk %}">Edit</a>
+      <a href="{% url 'delete-comment' exercise.order post.pk comment.pk %}">Delete</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if target %}
+  <div class="edit-comment">
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    <form action="{% url 'edit-comment' exercise.order post.pk target.pk %}" method="POST">
+      {% csrf_token %}
+      <textarea name="content" placeholder="Comment">{% if values %}{{ values.content }}{% else %}{{ target.content }}{% endif %}</textarea>
+      <button type="submit">Update</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="add-comment">
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+    <form action="{% url 'add-comment' exercise.order post.pk %}" method="POST">
+      {% csrf_token %}
+      <textarea name="content" placeholder="Comment">{{ values.content }}</textarea>
+      <button type="submit">Post</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="forum">
+  <h2>Exercise {{ exercise.order }}: {{ exercise.title }} Forum</h2>
+  <a href="{% url 'add-post' exercise.order %}">Ask</a>
+  {% for post in exercise.posts.all %}
+  <div class="post">
+    <h3>{{ post.title }}</h3>
+    <div class="metadata">posted by {{ post.author.first_name }} on {{ post.datetime }}</div>
+    <div class="comments">{{ post.num_comments }} comments</div>
+    <div class="answers">{{ post.num_answers }} answers</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
