@@ -22,17 +22,45 @@ class Exercise(models.Model):
 
     class Meta:
         ordering = 'order',
-        unique_together = 'title', 'order'
 
+    order = models.IntegerField(unique=True)
     title = models.CharField(max_length=256)
-    order = models.IntegerField()
-    exercise_repo = models.CharField(max_length=4096)
-    instructions = models.CharField(max_length=4096)
+    repo_url = models.CharField(max_length=4096)
+    instructions_url = models.CharField(max_length=4096)
     publish_date = models.DateField()
     deadline = models.DateField()
 
     def __str__(self):
         return f'Exercise {self.order}: {self.title}'
+
+
+class UserExercise:
+
+    def __init__(self, user, exercise):
+        self.user = user
+        self.exercise = exercise
+
+    def __getattr__(self, key):
+        return getattr(self.exercise, key)
+
+    @classmethod
+    def all(cls, user, at):
+        for exercise in Exercise.objects.filter(publish_date__lte=at):
+            yield cls(user, exercise)
+
+    @property
+    def submission(self):
+        return Submission.objects.filter(user=self.user, exercise=self.exercise).first()
+
+    @property
+    def extension(self):
+        return Extension.objects.filter(user=self.user, exercise=self.exercise).first()
+
+    @property
+    def effective_deadine(self):
+        if self.extension:
+            return self.extension.deadline
+        return self.deadline
 
 
 class Submission(models.Model):
@@ -49,6 +77,16 @@ class Submission(models.Model):
 
     def __str__(self):
         return f'{self.exercise} of {self.user}'
+
+    @property
+    def cr_penalty(self):
+        return None
+
+    @property
+    def final_grade(self):
+        if not self.cr_penalty:
+            return None
+        return self.test_grade - self.cr_penalty
 
 
 class Extension(models.Model):

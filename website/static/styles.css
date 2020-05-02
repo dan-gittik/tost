@@ -6,3 +6,7 @@ html, body {
 * {
   box-sizing: border-box;
 }
+
+.exercise-complete {
+  background-color: gray;
+}

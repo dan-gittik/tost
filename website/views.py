@@ -1,8 +1,11 @@
+import datetime as dt
 import secrets
 
+import dateutil.parser as dateutil
 from django.contrib.auth import login as do_login, logout as do_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db.models import Count
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render, redirect
 
@@ -126,7 +129,46 @@ def change_password(request):
 
 @login_required
 def exercises(request):
-    return render(request, 'exercises.html')
+    today = dt.date.today()
+    return render(request, 'exercises.html', {
+        'today': today,
+        'exercises': models.UserExercise.all(request.user, today),
+        'Extension': models.Extension,
+    })
+
+
+@login_required
+def exercise_test(request, exercise):
+    pass
+
+
+@login_required
+def exercise_cr_files(request, exercise, path):
+    pass
+
+
+@login_required
+def exercise_forum(request, exercise):
+    pass
+
+
+@login_required
+def extension(request):
+    if request.method == 'POST':
+        _add_extension(request)
+        return redirect('exercises')
+    today = dt.date.today()
+    exercises = models.Exercise.objects.annotate(count=Count('extensions')).filter(
+        publish_date__lte = today,
+        deadline__gt = today,
+        count = 0,
+    )
+    if not exercises.exists():
+        return redirect('exercises')
+    return render(request, 'extension.html', {
+        'selected': int(request.GET.get('exercise')),
+        'exercises': exercises,
+    })
 
 
 # HELPERS
@@ -219,6 +261,27 @@ def _validate_email(request):
     do_login(request, user)
 
 
+def _add_extension(request):
+    exercise = request.POST.get('exercise')
+    if not _is_valid_exercise(exercise):
+        raise ValueError('Invalid exercise.')
+    deadline = request.POST.get('deadline')
+    if not _is_valid_date(deadline):
+        raise ValueError('Invalid date.')
+    deadline = dateutil.parse(deadline).date()
+    reason = request.POST.get('reason')
+    if not reason:
+        raise ValueError('Invalid reason.')
+    exercise = models.Exercise.objects.filter(order=exercise).first()
+    if models.Extension.objects.filter(user=request.user, exercise=exercise).exists():
+        raise ValueError('Exercise already has an extension.')
+    models.Extension.objects.create(
+        user = request.user,
+        exercise = exercise,
+        deadline = deadline,
+        reason = reason,
+        status = models.Extension.PENDING,
+    )
 
 
 def _is_valid_student_id(student_id):
@@ -231,3 +294,26 @@ def _is_valid_email(email):
 
 def _is_valid_password(password):
     return password
+
+
+def _is_valid_exercise(exercise):
+    if not exercise or not exercise.isnumeric():
+        return False
+    today = dt.date.today()
+    exercise = models.Exercise.objects.filter(
+        order = int(exercise),
+        publish_date__lte = today,
+        deadline__gt = today,
+    ).first()
+    if not exercise:
+        return False
+    return True
+
+
+def _is_valid_date(date):
+    if not date:
+        return False
+    try:
+        return isinstance(dateutil.parse(date), dt.datetime)
+    except Exception:
+        return False

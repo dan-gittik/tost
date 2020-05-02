@@ -1,5 +1,55 @@
 {% extends 'base.html' %}
 
 {% block body %}
-<p>Exercises</p>
+<h1>Exercises</h1>
+<div class="exercises">
+  {% for exercise in exercises %}
+  <div class="exercise{% if exercise.effective_deadline < today %} exercise-complete{% endif %}">
+    <div class="row">
+      <h2>
+        <a href="{{ exercise.instructions_url }}">
+          Exercise {{ exercise.order }}: {{ exercise.title }}
+        </a>
+      </h2>
+      <div class="column">
+        <a href="{% url 'exercise-forum' exercise.pk %}">Forum</a>
+      </div>
+      <div class="column">
+        {% if exercise.submission.test_grade %}
+        <a href="{% url 'exercise-test' exercise.order %}">{{ exercise.submission.test_grade }}</a>
+        {% endif %}
+      </div>
+      <div class="column">
+        {% if exercise.submission.cr_grade %}
+        <a href="{% url 'exercise-cr-files' exercise.order %}">{{ exercise.submission.cr_grade }}</a>
+        {% endif %}
+      </div>
+      <div class="column">
+        {% if exercise.final_grade %}
+        {{ exercise.final_grade }}
+        {% endif %}
+      </div>
+    </div>
+    <div class="period">
+      {{ exercise.publish_date }}
+      —
+      {% if exercise.extension %}
+        {% if exercise.extension.status == Extension.APPROVED %}
+        <del>{{ exercise.deadline }}</del>
+        {{ exercise.extension.deadline }}
+        {% elif exercise.extension.status == Extension.DENIED %}
+        {{ exercise.deadline }} (extension denied)
+        {% else %}
+        {{ exercise.deadline }} (extension pending)
+        {% endif %}
+      {% else %}
+        {{ exercise.deadline }}
+        {% if exercise.deadline >= today %}
+        (<a href="{% url 'extension' %}?exercise={{ exercise.order }}">Ask for an extension</a>)
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
 {% endblock %}

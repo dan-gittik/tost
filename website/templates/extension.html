@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<div class="form">
+  {% if error %}
+  <div class="form-error">{{ error }}</div>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <select id="exercises" name="exercise">
+      {% for exercise in exercises %}
+      <option value="{{ exercise.order }}" {% if exercise.order == selected %} selected="selected"{% endif %}>
+        Exercise {{ exercise.order }}: {{ exercise.title }}
+      </option>
+      {% endfor %}
+    </select>
+    <input type="text" name="deadline" value="{{ values.deadline }}" placeholder="Deadline" /> instead of <span id="deadline"></span>.
+    <textarea name="reason" placeholder="Reason">{{ values.reason|default_if_none:'' }}</textarea>
+    <button type="submit">Submit</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+  var deadlines = {
+    {% for exercise in exercises %}
+    {{ exercise.order }}: '{{ exercise.deadline }}',
+    {% endfor %}
+  };
+  function updateDeadline() {
+    var order = $('#exercises').val();
+    var deadline = deadlines[order];
+    $('#deadline').text(deadline);
+  }
+  $(document).ready(function() {
+    updateDeadline();
+    $('#exercises').change(updateDeadline);
+  });
+</script>
+{% endblock %}
