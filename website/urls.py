@@ -25,5 +25,6 @@ urlpatterns = [
     path('exercises/<exercise>/forum/<post>/comments/<comment>/edit', views.edit_comment, name='edit-comment'),
     path('exercises/<exercise>/forum/<post>/comments/<comment>/delete', views.delete_comment, name='delete-comment'),
     path('extension', views.extension, name='extension'),
+    path('webhook', views.webhook, name='webhook'),
     path('', views.index, name='index'),
 ]

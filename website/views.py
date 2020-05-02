@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import secrets
 
 import dateutil.parser as dateutil
@@ -6,6 +7,7 @@ from django.contrib.auth import login as do_login, logout as do_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import Count
+from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.shortcuts import get_object_or_404, render, redirect
@@ -281,6 +283,12 @@ def extension(request):
         'selected': int(request.GET.get('exercise')),
         'exercises': exercises,
     })
+
+
+@csrf_exempt
+def webhook(request):
+    data = json.load(request)
+    return HttpResponse('')
 
 
 # HELPERS
