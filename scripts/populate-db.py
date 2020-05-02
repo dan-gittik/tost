@@ -13,20 +13,26 @@ django.setup()
 
 import datetime as dt
 
-from django.contrib.auth.models import User
-from website.models import Exercise, Extension
+from django.contrib.auth.models import User as AuthUser
+from website.models import User, Exercise, Extension
 
 
 def main():
     for i in range(10):
+        email = f'{i}@gmail.com'
         student_id = f'{i}' * 5
-        if not User.objects.filter(username=student_id).exists():
-            User.objects.create_user(
-                username = student_id,
-                email = f'{i}@gmail.com',
+        if not User.objects.filter(student_id=student_id).exists():
+            auth = AuthUser.objects.create_user(
+                username = email,
                 password = f'{i}' * 3,
-                first_name = f'user {i}',
-                is_active = i % 3 != 0,
+            )
+            user = User.objects.create(
+                auth = auth,
+                name = f'user {i}',
+                email = email,
+                student_id = student_id,
+                github = f'user{i}',
+                is_valid = True,
             )
     today = dt.date.today()
     for i in range(10):
@@ -35,7 +41,7 @@ def main():
             offset = 2 * (i - 5)
             exercise = Exercise.objects.create(
                 title = title,
-                order = i,
+                number = i,
                 repo_url = f'https://github.com/{i}',
                 instructions_url = f'https://docs.google.com/{i}',
                 publish_date = today + dt.timedelta(days=offset),
@@ -43,7 +49,7 @@ def main():
             )
             if i % 3 == 2:
                 extension = Extension.objects.create(
-                    user = User.objects.get(username='11111'),
+                    user = User.objects.get(student_id='11111'),
                     exercise = exercise,
                     deadline = today + dt.timedelta(days=offset + 10),
                     reason = f'reason {i}',

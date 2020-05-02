@@ -1,29 +1,60 @@
 import os
 
-from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login
+from django.contrib.auth.models import User as AuthUser
 from django.db import models
 
 
-def __repr__(self):
-    return f'{self.first_name} ({self.username} {self.email})'
-User.__repr__ = __repr__
+class User(models.Model):
 
+    auth = models.OneToOneField(AuthUser, on_delete=models.CASCADE, related_name='info')
+    email = models.CharField(max_length=256)
+    name = models.CharField(max_length=256)
+    student_id = models.CharField(max_length=256)
+    github = models.CharField(max_length=256)
+    token = models.CharField(max_length=64, null=True)
+    is_valid = models.BooleanField(default=False)
 
-@property
-def token(self):
-    return self.last_name
-@token.setter
-def token(self, token):
-    self.last_name = token
-User.token = token
+    def __str__(self):
+        return f'{self.name} ({self.student_id}, {self.email_address}'
+
+    @classmethod
+    def create(cls, student_id, name, github, email, password, token=None):
+        auth = AuthUser.objects.create_user(
+            username = email,
+            password = password,
+        )
+        user = cls.objects.create(
+            auth = auth,
+            student_id = student_id,
+            name = name,
+            github = github,
+            email = email,
+            token = token,
+        )
+        return user
+
+    @classmethod
+    def authenticate(cls, email, password):
+        auth = authenticate(username=email, password=password)
+        if not auth:
+            return None
+        return auth.info
+
+    def set_password(self, password):
+        self.auth.set_password(password)
+        self.auth.save()
+    
+    def login(self, request):
+        login(request, self.auth)
 
 
 class Exercise(models.Model):
 
     class Meta:
-        ordering = 'order',
+        ordering = 'number',
 
-    order = models.IntegerField(unique=True)
+    number = models.IntegerField(unique=True)
     title = models.CharField(max_length=256)
     repo_url = models.CharField(max_length=4096)
     instructions_url = models.CharField(max_length=4096)
@@ -31,7 +62,7 @@ class Exercise(models.Model):
     deadline = models.DateField()
 
     def __str__(self):
-        return f'Exercise {self.order}: {self.title}'
+        return f'Exercise {self.number}: {self.title}'
 
 
 class UserExercise:
@@ -66,7 +97,7 @@ class UserExercise:
 class Submission(models.Model):
 
     class Meta:
-        ordering = 'exercise__order', 'user__first_name'
+        ordering = 'exercise__number', 'user__name'
         unique_together = 'user', 'exercise'
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submissions')
@@ -92,7 +123,7 @@ class Submission(models.Model):
 class Extension(models.Model):
 
     class Meta:
-        ordering = 'exercise__order', 'user__first_name'
+        ordering = 'exercise__number', 'user__name'
         unique_together = 'exercise', 'user'
 
     PENDING = 'p'

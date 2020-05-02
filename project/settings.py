@@ -56,3 +56,4 @@ STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 LOGIN_URL = '/login'
 DATE_FORMAT = 'd/m/Y'
+REPOS_ROOT = os.path.join(BASE_DIR, 'repos')

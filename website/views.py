@@ -1,11 +1,15 @@
 import datetime as dt
 import json
+import os
+import pathlib
+import re
 import secrets
+import subprocess
 
 import dateutil.parser as dateutil
-from django.contrib.auth import login as do_login, logout as do_logout
+from django.conf import settings
+from django.contrib.auth import logout as do_logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.db.models import Count
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -13,6 +17,9 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404, render, redirect
 
 from . import models
+
+
+_name_pattern = re.compile(r'/(.*?)\.git$')
 
 
 # VIEWS
@@ -23,10 +30,12 @@ def index(request):
 
 
 def register(request):
+    if request.user.is_authenticated:
+        return redirect('account')
     settings = models.Settings.get()
     if request.method == 'POST':
         try:
-            user = _register_user(request, settings)
+            _register_user(request, settings)
             return render(request, 'register_success.html')
         except ValueError as error:
             return render(request, 'register.html', {
@@ -76,10 +85,10 @@ def account(request):
             return render(request, 'account.html', {
                 'error': error,
                 'values': request.POST,
-                'user': request.user,
+                'user': request.user.info,
             })
     return render(request, 'account.html', {
-        'user': request.user,
+        'user': request.user.info,
     })
 
 
@@ -90,7 +99,7 @@ def logout(request):
 
 @login_required
 def delete_account(request):
-    request.user.delete()
+    request.user.info.delete()
     do_logout(request)
     return redirect('index')
 
@@ -112,7 +121,7 @@ def change_password(request):
     token = args.get('token')
     if not email or not token:
         return redirect('index')
-    user = User.objects.filter(email=email, last_name=token).first()
+    user = models.User.objects.filter(email=email, token=token).first()
     if not user:
         return redirect('index')
     if request.method == 'POST':
@@ -132,8 +141,8 @@ def change_password(request):
 
 @login_required
 def exercises(request):
-    today = timezone().now().date()
-    exercises = models.UserExercise.all(request.user, today)
+    today = timezone.now().date()
+    exercises = models.UserExercise.all(request.user.info, today)
     return render(request, 'exercises.html', {
         'today': today,
         'exercises': exercises,
@@ -288,6 +297,7 @@ def extension(request):
 @csrf_exempt
 def webhook(request):
     data = json.load(request)
+    _clone_repo(data['repository']['ssh_url'])
     return HttpResponse('')
 
 
@@ -305,26 +315,22 @@ def _register_user(request, settings):
     name = request.POST.get('name')
     if not name:
         raise ValueError('Invalid name.')
+    github = request.POST.get('github')
+    if not github:
+        raise ValueError('Invalid GitHub username.')
     email = request.POST.get('email')
     if not _is_valid_email(email):
         raise ValueError('Invalid email address.')
     password = request.POST.get('password')
     if not _is_valid_password(password):
         raise ValueError('Invalid password.')
-    if User.objects.filter(username=student_id).exists():
+    if models.User.objects.filter(student_id=student_id).exists():
         raise ValueError('A student with this ID already exists')
-    if User.objects.filter(email=email).exists():
+    if models.User.objects.filter(email=email).exists():
         raise ValueError('A student with this email already exists')
     token = secrets.token_urlsafe(64)
     print(token) # TODO send email.
-    user = User.objects.create_user(
-        username = student_id,
-        first_name = name,
-        last_name = token,
-        email = email,
-        password = password,
-        is_active = False,
-    )
+    user = models.User.create(student_id, name, github, email, password, token=token)
     return user
 
 
@@ -335,36 +341,36 @@ def _login_user(request):
     password = request.POST.get('password')
     if not _is_valid_password(password):
         raise ValueError('Invalid password.')
-    user = User.objects.filter(email=email).first()
-    if not user or not user.is_active:
+    user = models.User.authenticate(email, password)
+    if not user:
+        raise ValueError('Invalid credentials.')
+    if not user.is_valid:
         raise ValueError('Your email has not been validated yet.')
-    if user.check_password(password):
-        do_login(request, user)
-        return user
-    raise ValueError('Invalid credentials.')
+    user.login(request)
+    return user
 
 
 def _update_password(request, user=None):
     if not user:
-        user = request.user
+        user = request.user.info
     password = request.POST.get('password')
     if not _is_valid_password(password):
         raise ValueError('Invalid password.')
     user.set_password(password)
-    user.last_name = ''
+    user.token = ''
     user.save()
-    do_login(request, user)
+    user.login(request)
 
 
 def _reset_password(request):
     email = request.POST.get('email')
     if not _is_valid_email(email):
         raise ValueError('Invalid email.')
-    user = User.objects.filter(email=email).first()
-    if user and user.is_active:
+    user = models.User.objects.filter(email=email).first()
+    if user and user.is_valid:
         token = secrets.token_urlsafe(64)
         print(token) # TODO send email.
-        user.last_name = token
+        user.token = token
         user.save()
 
 
@@ -372,13 +378,13 @@ def _validate_email(request):
     token = request.GET.get('token')
     if not token:
         raise ValueError('Invalid token.')
-    user = User.objects.filter(last_name=token).first()
+    user = models.User.objects.filter(token=token).first()
     if not user:
-        return error
-    user.last_name = ''
-    user.is_active = True
+        raise ValueError('Token has expired.')
+    user.token = ''
+    user.is_valid = True
     user.save()
-    do_login(request, user)
+    user.login(request)
 
 
 def _add_extension(request):
@@ -393,10 +399,10 @@ def _add_extension(request):
     if not reason:
         raise ValueError('Invalid reason.')
     exercise = models.Exercise.objects.filter(order=exercise).first()
-    if models.Extension.objects.filter(user=request.user, exercise=exercise).exists():
+    if models.Extension.objects.filter(user=request.user.info, exercise=exercise).exists():
         raise ValueError('Exercise already has an extension.')
     models.Extension.objects.create(
-        user = request.user,
+        user = request.user.info,
         exercise = exercise,
         deadline = deadline,
         reason = reason,
@@ -414,7 +420,7 @@ def _add_post(request, exercise):
     post = models.Post.objects.create(
         exercise = exercise,
         title = title,
-        author = request.user,
+        author = request.user.info,
         content = content,
     )
     return post
@@ -438,7 +444,7 @@ def _add_comment(request, post):
         raise ValueError('Invalid content.')
     comment = models.Comment.objects.create(
         post = post,
-        author = request.user,
+        author = request.user.info,
         content = content,
     )
     return comment
@@ -450,6 +456,19 @@ def _edit_comment(request, comment):
         raise ValueError('Invalid content.')
     comment.content = content
     comment.save()
+
+
+def _clone_repo(url):
+    name = _name_pattern.search(url).group(1)
+    path = pathlib.Path(settings.REPOS_ROOT) / name
+    if path.exists():
+        os.chdir(path)
+        subprocess.run(['git', 'pull', 'origin', 'master'])
+    else:
+        os.makedirs(settings.REPOS_ROOT, exist_ok=True)
+        os.chdir(settings.REPOS_ROOT)
+        print(['git', 'clone', url])
+        subprocess.run(['git', 'clone', url])
 
 
 def _is_valid_student_id(student_id):
